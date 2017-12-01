@@ -3,7 +3,7 @@ import argparse
 
 # --- settings common to train and eval ---
 defaults = argparse.Namespace()
-defaults.MODEL_NAME = 'alexnet'
+defaults.MODEL_NAME = 'resnet'
 defaults.LOAD_STATE = ''
 defaults.VISDOM_PORT = 8100
 
@@ -19,6 +19,7 @@ defaults_train.LEARNING_RATE = 0.01
 defaults_train.MOMENTUM = 0.9
 defaults_train.NUM_EPOCHS = 100
 defaults_train.DATA_DIR = '/local-scratch/saeedI/ML/final/dataset'
+defaults_train.SAVE_DIR = '/local-scratch/saeedI/ML/final/NNs/weights'
 
 defaults_train.NUM_WORKERS = 2
 defaults_train.WEIGHT_DECAY = 0.00005
@@ -72,6 +73,9 @@ def get_arguments(argv):
                               help="Momentum component of the optimiser.")
     parser_train.add_argument('--datadir', required=False, default=defaults.DATA_DIR,
                               help="Path to the RGB images for training")
+    parser_train.add_argument('--savedir', required=False, default=defaults.SAVE_DIR,
+                              help="Path to save the model weights")
+
     parser_train.add_argument('--num-workers', type=int, default=defaults.NUM_WORKERS)
     parser_train.add_argument('--weight-decay', type=float, default=defaults.WEIGHT_DECAY)
     parser_train.add_argument('--log-step', type=int, default=defaults.LOG_STEP)
