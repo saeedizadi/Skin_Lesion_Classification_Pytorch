@@ -3,7 +3,7 @@ import argparse
 
 # --- settings common to train and eval ---
 defaults = argparse.Namespace()
-defaults.MODEL_NAME = 'resnet'
+defaults.MODEL_NAME = 'vgg'
 defaults.LOAD_STATE = ''
 defaults.VISDOM_PORT = 8100
 
@@ -15,6 +15,7 @@ defaults_train = deepcopy(defaults)
 defaults_train.BATCH_SIZE = 64
 defaults_train.INPUT_WIDTH = 256
 defaults_train.INPUT_HEIGHT = 256
+defaults_train.CROP_SIZE = 227
 defaults_train.LEARNING_RATE = 0.01
 defaults_train.MOMENTUM = 0.9
 defaults_train.NUM_EPOCHS = 100
@@ -81,6 +82,7 @@ def get_arguments(argv):
     parser_train.add_argument('--log-step', type=int, default=defaults.LOG_STEP)
     parser_train.add_argument('--input-width', type=int, default=defaults.INPUT_WIDTH)
     parser_train.add_argument('--input-height', type=int, default=defaults.INPUT_HEIGHT)
+    parser_train.add_argument('--crop-size', type=int, default=defaults.CROP_SIZE)
 
 
     parser_crossval = subparsers.add_parser('crossval')
@@ -111,3 +113,4 @@ def get_arguments(argv):
     args = parser.parse_args(argv)
 
     return args
+

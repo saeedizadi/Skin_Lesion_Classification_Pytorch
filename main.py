@@ -8,19 +8,20 @@ import torch.optim as optim
 from torch.autograd import Variable
 import sys
 import os
-import shutil
-import numpy as np
 
 from settings import get_arguments
 from avg import AverageMeter
 
 
-def load_data(datadir, batch_size, num_workers):
+def load_data(datadir, crop_size, batch_size, num_workers):
     # -- prepare data ---#
     data_transfrom = {
-        'train': transforms.Compose([transforms.RandomSizedCrop(224),
+        'train': transforms.Compose([transforms.RandomCrop(crop_size),
+                                     transforms.RandomHorizontalFlip(),
+                                     #transforms.RandomVerticalFlip(),
+                                     #transforms.ColorJitter(),
                                      transforms.ToTensor()]),
-        'val': transforms.Compose([transforms.CenterCrop(224),
+        'val': transforms.Compose([transforms.CenterCrop(crop_size),
                                    transforms.ToTensor()])}
 
     dsets = {x: datasets.ImageFolder(os.path.join(datadir, x), transform=data_transfrom[x])
@@ -46,25 +47,25 @@ def accuracy(output, target, topk=(1,)):
     return res
 
 
-def save_checkpoint(state, is_best, savedir, filename='checkpoint.pth.tar'):
-    torch.save(state, filename)
-    if is_best:
-        shutil.copyfile(filename, 'weights/model_best.pth.tar')
-
-
-def main(model, args):
+def main(model, args, base_parameters=None):
 
     #--- load data ---
-    data_loader = load_data(args.datadir,args.batch_size, args.num_workers)
+    data_loader = load_data(args.datadir, args.crop_size, args.batch_size, args.num_workers)
 
 
     #--- define training settings ---
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    if base_parameters is not None:
+        optimizer = optim.SGD([
+                    {'params': base_parameters},
+                    {'params': model.classifier.parameters(), 'lr': args.lr}
+                ], lr=args.lr*0.1, momentum=0.9)
+    else:
+        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+
     criterion = nn.CrossEntropyLoss().cuda()
 
-
-
     losses = {x: AverageMeter() for x in ['train', 'val']}
+    best_top1 = 0.0
     for epoch in range(1, args.num_epochs+1):
 
         #---in each epoch, do a train and a validation step---
@@ -74,8 +75,6 @@ def main(model, args):
             else:
                 model.eval()
                 top1s = AverageMeter()
-                best_top1 = 0.0
-
             losses[phase].reset()
             for i, (image, target) in enumerate(data_loader[phase]):
                 images = Variable(image.float().cuda())
@@ -97,20 +96,30 @@ def main(model, args):
 
         if top1s.avg > best_top1:
             best_top1 = top1s.avg
-            is_best = True
-        filename = "weights/{0}-{1:02}.pth.tar".format(args.model, epoch)
-        save_checkpoint({
-            'epoch': epoch,
-            'arch': args.model,
-            'state_dict': model.state_dict(),
-            'best_top1': best_top1,
-            'optimizer': optimizer.state_dict(),
-        }, is_best, filename)
+
+            filename = "weights/{0}-best.pth.tar".format(args.model)
+            state = {
+                    'epoch': epoch,
+                    'state_dict': model.state_dict(),
+                    'best_top1': best_top1,
+                    'optimizer': optimizer.state_dict(),
+                    }
+            torch.save(state, filename)
+
+        if epoch % args.log_step == 0:
+            filename = "weights/{0}-{1:02}.pth.tar".format(args.model, epoch)
+            state = {
+                'epoch': epoch,
+                'state_dict': model.state_dict(),
+                'best_top1': best_top1,
+                'optimizer': optimizer.state_dict(),
+            }
+            torch.save(state, filename)
 
         print('Epoch:{0}/{1}'
               '\tTrainLoss: {2:.4f}'
               '\tTestLoss: {3:.4f}'
-              '\tBestTop1: {4:.4f}'.format(epoch, args.num_epochs + 1, losses['train'].avg, losses['val'].avg, top1s.avg))
+              '\tBestTop1: {4:.4f}'.format(epoch, args.num_epochs, losses['train'].avg, losses['val'].avg, best_top1))
 
 
 if __name__ == '__main__':
@@ -120,11 +129,21 @@ if __name__ == '__main__':
     if args.model == 'alexnet':
         model = models.alexnet(pretrained=True)
         model.classifier._modules['6'] = nn.Linear(4096, 10)
+
+        # #---we will use larger lr for fully connected layers---
+        # ignored_params = list(map(id, model.classifier._modules['6'].parameters()))
+        # base_params = filter(lambda p: id(p) not in ignored_params, model.parameters())
+        # base_parameters = base_params
+
         model = model.cuda()
 
     elif args.model == 'vgg':
         model = models.vgg19(pretrained=True)
         model.classifier._modules['6'] = nn.Linear(4096, 10)
+        #---we will use larger lr for fully connected layers---
+        ignored_params = list(map(id, model.classifier.parameters()))
+	base_params = filter(lambda p: id(p) not in ignored_params, model.parameters())
+
         model = model.cuda()
 
     elif args.model == 'resnet':
@@ -137,5 +156,7 @@ if __name__ == '__main__':
         model.classifier = nn.Linear(1024, 10)
         model = model.cuda()
 
-    main(model, args)
+    #---Parallel training on several GPUs---
+    # model = nn.DataParallel(model, device_ids=[0,1]).cuda()
+    main(model, args, base_params)
 
