@@ -3,7 +3,7 @@ import argparse
 
 # --- settings common to train and eval ---
 defaults = argparse.Namespace()
-defaults.MODEL_NAME = 'vgg'
+defaults.MODEL_NAME = 'densenet'
 defaults.LOAD_STATE = ''
 defaults.VISDOM_PORT = 8100
 
@@ -12,7 +12,7 @@ defaults_common = deepcopy(defaults)
 
 # --- train settings ---
 defaults_train = deepcopy(defaults)
-defaults_train.BATCH_SIZE = 64
+defaults_train.BATCH_SIZE = 32
 defaults_train.INPUT_WIDTH = 256
 defaults_train.INPUT_HEIGHT = 256
 defaults_train.CROP_SIZE = 227
